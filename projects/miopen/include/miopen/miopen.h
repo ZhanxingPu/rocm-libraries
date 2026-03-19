@@ -2805,6 +2805,9 @@ MIOPEN_EXPORT miopenStatus_t miopenCatForward(miopenHandle_t handle,
  * A is FP16 col-major (M×K), B_packed is uint4 packed (N×K/2),
  * output C is FP16 col-major (M×N).
  *
+ * Dequantization: val = (uint4_val - zero) * scale.
+ * If zeros is NULL, zero points are treated as 0: val = uint4_val * scale.
+ *
  * Requires: M % 128 == 0, N % 128 == 0, K % 32 == 0, RDNA3+ GPU.
  *
  * @param handle         MIOpen handle (input)
@@ -2815,7 +2818,7 @@ MIOPEN_EXPORT miopenStatus_t miopenCatForward(miopenHandle_t handle,
  * @param lda            Leading dimension of A (>= M) (input)
  * @param B_packed       Packed uint4 weight matrix (input)
  * @param scales         FP16 per-group scale factors (input)
- * @param zeros          FP16 per-group zero points (input)
+ * @param zeros          FP16 per-group zero points, or NULL to skip (input, optional)
  * @param group_size     Quantization group size along K (input)
  * @param num_groups_k   Number of groups along K (= K/group_size) (input)
  * @param C              FP16 output matrix, col-major (output)

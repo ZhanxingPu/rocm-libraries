@@ -42,14 +42,16 @@ namespace gemm_fp16_u4 {
 //   A        : FP16  (_Float16)    — input activations, col-major
 //   B_packed : UINT4 (packed u8)   — quantized weights, 2 values per byte
 //   scales   : FP16  (_Float16)    — per-group scale factors
-//   zeros    : FP16  (_Float16)    — per-group zero points
+//   zeros    : FP16  (_Float16)    — per-group zero points (optional)
 //   C        : FP16  (_Float16)    — output, col-major
 //
 // Passing data of other types will produce incorrect results silently.
 struct ProblemDescription : ProblemDescriptionBase
 {
-    ProblemDescription(int M_, int N_, int K_, int group_size_, int num_groups_k_)
-        : M(M_), N(N_), K(K_), group_size(group_size_), num_groups_k(num_groups_k_)
+    ProblemDescription(int M_, int N_, int K_, int group_size_, int num_groups_k_,
+                       bool use_zeros_ = true)
+        : M(M_), N(N_), K(K_), group_size(group_size_), num_groups_k(num_groups_k_),
+          use_zeros(use_zeros_)
     {
         if(M <= 0 || N <= 0 || K <= 0)
         {
@@ -78,6 +80,7 @@ struct ProblemDescription : ProblemDescriptionBase
     int GetK() const { return K; }
     int GetGroupSize() const { return group_size; }
     int GetNumGroupsK() const { return num_groups_k; }
+    bool HasZeros() const { return use_zeros; }
 
     NetworkConfig MakeNetworkConfig() const override;
 
@@ -87,6 +90,7 @@ private:
     int K;
     int group_size;
     int num_groups_k;
+    bool use_zeros;
 };
 
 } // namespace gemm_fp16_u4

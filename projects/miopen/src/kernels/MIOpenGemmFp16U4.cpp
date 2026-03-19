@@ -54,6 +54,10 @@ typedef float    float8 __attribute__((ext_vector_type(8)));
 #define GEMM_FP16_U4_NW_R (GEMM_FP16_U4_WM_R * GEMM_FP16_U4_WN_R)
 #define GEMM_FP16_U4_THR_R (GEMM_FP16_U4_NW_R * 32)
 
+#ifndef GEMM_FP16_U4_USE_ZEROS
+#define GEMM_FP16_U4_USE_ZEROS 0
+#endif
+
 extern "C" __global__
     __attribute__((amdgpu_flat_work_group_size(GEMM_FP16_U4_THR_R, GEMM_FP16_U4_THR_R)))
     __attribute__((amdgpu_waves_per_eu(8)))
@@ -142,7 +146,9 @@ extern "C" __global__
         {
             int gid      = cur_k_grp + b_gid_base;
             cached_s     = scales[gid];
+#if GEMM_FP16_U4_USE_ZEROS
             cached_z     = zeros[gid];
+#endif
             cached_k_grp = cur_k_grp;
         }
         _Float16 s16 = cached_s, z16 = cached_z;

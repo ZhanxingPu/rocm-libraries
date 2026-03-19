@@ -67,6 +67,9 @@ ConvSolution GemmFp16U4Forward::GetSolution([[maybe_unused]] const ExecutionCont
 
     KernelBuildParameters build_params;
 
+    if(problem.HasZeros())
+        build_params.Define("GEMM_FP16_U4_USE_ZEROS", 1);
+
     auto kernel = KernelInfo{};
 
     kernel.comp_options = build_params.GenerateFor(kbp::HIP{});

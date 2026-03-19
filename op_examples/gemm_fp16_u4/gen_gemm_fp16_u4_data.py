@@ -27,6 +27,8 @@ def main():
                         help='Quantization group size along K (default: 128)')
     parser.add_argument('--no-ref', action='store_true',
                         help='Skip computing reference C')
+    parser.add_argument('--no-zeros', action='store_true',
+                        help='Skip generating zeros (zero points = 0)')
     parser.add_argument('--dir', type=str, default='data',
                         help='Output directory (default: data/)')
     parser.add_argument('--seed', type=int, default=42,
@@ -53,7 +55,8 @@ def main():
     print(f"  num_groups_k={num_groups_k}")
     print(f"  A: FP16 col-major (M x K)")
     print(f"  B_packed: UINT4 (N x K/2 bytes)")
-    print(f"  scales/zeros: FP16 (N x num_groups_k)")
+    print(f"  scales: FP16 (N x num_groups_k)")
+    print(f"  zeros:  {'disabled (--no-zeros)' if args.no_zeros else 'FP16 (N x num_groups_k)'}")
     print(f"  C: FP16 col-major (M x N)")
     print(f"  Seed: {args.seed}")
     print(f"  Output dir: {os.path.abspath(out_dir)}")
@@ -79,10 +82,14 @@ def main():
     scales = np.random.uniform(0.01, 0.05, (N, num_groups_k)).astype(np.float16)
     print(f"shape={scales.shape}")
 
-    # ---- zeros: FP16 (N x num_groups_k) ----
-    print("Generating zeros (FP16)...", end=" ", flush=True)
-    zeros = np.random.uniform(7.0, 9.0, (N, num_groups_k)).astype(np.float16)
-    print(f"shape={zeros.shape}")
+    # ---- zeros: FP16 (N x num_groups_k), optional ----
+    zeros = None
+    if not args.no_zeros:
+        print("Generating zeros (FP16)...", end=" ", flush=True)
+        zeros = np.random.uniform(7.0, 9.0, (N, num_groups_k)).astype(np.float16)
+        print(f"shape={zeros.shape}")
+    else:
+        print("Zeros: skipped (--no-zeros, zero points = 0)")
 
     # ---- Save binary files ----
     # A: col-major (Fortran order)
@@ -101,9 +108,10 @@ def main():
     print(f"Saved {file_S} ({os.path.getsize(file_S) / 1024:.1f} KB)")
 
     # zeros: row-major => layout [n * num_groups_k + g]
-    file_Z = os.path.join(out_dir, "gemm_fp16_u4_zeros.bin")
-    zeros.flatten(order='C').tofile(file_Z)
-    print(f"Saved {file_Z} ({os.path.getsize(file_Z) / 1024:.1f} KB)")
+    if zeros is not None:
+        file_Z = os.path.join(out_dir, "gemm_fp16_u4_zeros.bin")
+        zeros.flatten(order='C').tofile(file_Z)
+        print(f"Saved {file_Z} ({os.path.getsize(file_Z) / 1024:.1f} KB)")
 
     # ---- Compute reference: C = A @ dequant(B)^T ----
     if not args.no_ref:
@@ -111,13 +119,15 @@ def main():
               flush=True)
         t0 = time.time()
 
-        # Dequantize: B_dq[n, k] = (B_uint4[n, k] - zeros[n, k//gs]) * scales[n, k//gs]
         group_idx = np.arange(K) // group_size  # shape (K,)
         scales_f32 = scales.astype(np.float32)  # (N, num_groups_k)
-        zeros_f32  = zeros.astype(np.float32)   # (N, num_groups_k)
 
-        B_dq = (B_uint4.astype(np.float32) - zeros_f32[:, group_idx]) \
-             * scales_f32[:, group_idx]  # (N, K)
+        if zeros is not None:
+            zeros_f32 = zeros.astype(np.float32)
+            B_dq = (B_uint4.astype(np.float32) - zeros_f32[:, group_idx]) \
+                 * scales_f32[:, group_idx]  # (N, K)
+        else:
+            B_dq = B_uint4.astype(np.float32) * scales_f32[:, group_idx]
 
         # C = A @ B_dq^T => (M, K) @ (K, N) = (M, N)
         C_ref_f32 = A.astype(np.float32) @ B_dq.T
@@ -155,11 +165,18 @@ def main():
         f.write(f"A_layout=col-major\n")
         f.write(f"C_layout=col-major\n")
         f.write(f"B_packed_layout=row-major\n")
-        f.write(f"scales_zeros_layout=row-major\n")
+        f.write(f"scales_layout=row-major\n")
+        f.write(f"use_zeros={'true' if zeros is not None else 'false'}\n")
+        if zeros is not None:
+            f.write(f"zeros_layout=row-major\n")
+
+    file_list = ["gemm_fp16_u4_A.bin", "gemm_fp16_u4_B_packed.bin", "gemm_fp16_u4_scales.bin"]
+    if zeros is not None:
+        file_list.append("gemm_fp16_u4_zeros.bin")
+    file_list += ["gemm_fp16_u4_C_ref.bin", "gemm_fp16_u4_meta.txt"]
 
     print(f"\nFiles generated in {os.path.abspath(out_dir)}/:")
-    for fn in ["gemm_fp16_u4_A.bin", "gemm_fp16_u4_B_packed.bin", "gemm_fp16_u4_scales.bin",
-               "gemm_fp16_u4_zeros.bin", "gemm_fp16_u4_C_ref.bin", "gemm_fp16_u4_meta.txt"]:
+    for fn in file_list:
         fp = os.path.join(out_dir, fn)
         if os.path.exists(fp):
             sz = os.path.getsize(fp)

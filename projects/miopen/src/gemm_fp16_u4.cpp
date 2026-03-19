@@ -45,7 +45,8 @@ miopenStatus_t GemmFp16U4Forward(const Handle& handle,
                                  int ldc)
 {
     const auto problem =
-        gemm_fp16_u4::ProblemDescription{M, N, K, group_size, num_groups_k};
+        gemm_fp16_u4::ProblemDescription{M, N, K, group_size, num_groups_k,
+                                         zeros != nullptr};
     const auto invoke_params =
         gemm_fp16_u4::GemmFp16U4InvokeParams{M, N, K, A, lda, B_packed, scales, zeros,
                                               group_size, num_groups_k, C, ldc};

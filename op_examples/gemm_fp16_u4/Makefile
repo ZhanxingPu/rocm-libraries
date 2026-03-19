@@ -61,6 +61,16 @@ TARGET := test_gemm_fp16_u4.exe
 SIZE     ?= 128x128x128
 GS       ?= 128
 DATA_DIR ?= data
+NO_ZEROS ?=
+
+# Build --no-zeros flags for Python and C++ when NO_ZEROS=1
+ifeq ($(NO_ZEROS),1)
+    PY_NZ_FLAG  := --no-zeros
+    CXX_NZ_FLAG := --no-zeros
+else
+    PY_NZ_FLAG  :=
+    CXX_NZ_FLAG :=
+endif
 
 # ---- OS-specific: run command + clean ----
 
@@ -95,16 +105,16 @@ clean:
 	$(DO_CLEAN)
 
 gendata:
-	$(PYTHON) gen_gemm_fp16_u4_data.py $(SIZE) --group-size $(GS) --dir $(DATA_DIR)
+	$(PYTHON) gen_gemm_fp16_u4_data.py $(SIZE) --group-size $(GS) --dir $(DATA_DIR) $(PY_NZ_FLAG)
 
 run: $(TARGET)
-	$(RUN_CMD) $(SIZE) $(GS) $(DATA_DIR)
+	$(RUN_CMD) $(SIZE) $(GS) $(DATA_DIR) $(CXX_NZ_FLAG)
 
 run_custom: $(TARGET)
 	$(RUN_CMD) $(ARGS)
 
 test: gendata $(TARGET)
-	$(RUN_CMD) $(SIZE) $(GS) $(DATA_DIR)
+	$(RUN_CMD) $(SIZE) $(GS) $(DATA_DIR) $(CXX_NZ_FLAG)
 
 test_all: $(TARGET)
 	$(PYTHON) gen_gemm_fp16_u4_data.py 128x128x128 --group-size 128 --dir $(DATA_DIR)

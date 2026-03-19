@@ -7,7 +7,7 @@
 // A:        FP16 col-major (M × K), stride lda = M
 // B_packed: uint4 packed (N × K/2), each byte = 2 values (low nibble first)
 // scales:   FP16 (N × num_groups_k), per-column per-group
-// zeros:    FP16 (N × num_groups_k), per-column per-group zero point
+// zeros:    FP16 (N × num_groups_k), per-column per-group zero point (optional, nullptr to skip)
 // C:        FP16 col-major (M × N), stride ldc = M
 //
 // Workflow:
@@ -109,12 +109,14 @@ static MeasureResult measureMedian(hipStream_t stream, int niters,
     return {round_ms[NROUNDS / 2], round_ms[0], round_ms[NROUNDS - 1]};
 }
 
-bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& data_dir)
+bool test_gemm_fp16_u4(int M, int N, int K, int group_size,
+                       const std::string& data_dir, bool use_zeros)
 {
     int num_groups_k = K / group_size;
 
     std::cout << "\n=== Test GemmFp16U4 M=" << M << " N=" << N << " K=" << K
-              << " group_size=" << group_size << " ===" << std::endl;
+              << " group_size=" << group_size
+              << (use_zeros ? "" : " (no zeros)") << " ===" << std::endl;
 
     std::string fA = data_dir + "/gemm_fp16_u4_A.bin";
     std::string fB = data_dir + "/gemm_fp16_u4_B_packed.bin";
@@ -133,15 +135,19 @@ bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& d
     size_t countZ = static_cast<size_t>(N) * num_groups_k;
     size_t countC = static_cast<size_t>(M) * N;
 
-    if(!readBin(fA, h_A, countA) ||
-       !readBin(fB, h_B_packed, countB) ||
-       !readBin(fS, h_scales, countS) ||
-       !readBin(fZ, h_zeros, countZ))
+    bool data_ok = readBin(fA, h_A, countA) &&
+                   readBin(fB, h_B_packed, countB) &&
+                   readBin(fS, h_scales, countS);
+    if(use_zeros)
+        data_ok = data_ok && readBin(fZ, h_zeros, countZ);
+
+    if(!data_ok)
     {
         std::cerr << "  ERROR: Failed to read input data files from " << data_dir << "/" << std::endl;
         std::cerr << "  Run: python3 gen_gemm_fp16_u4_data.py "
                   << M << "x" << K << "x" << N
                   << " --group-size " << group_size
+                  << (use_zeros ? "" : " --no-zeros")
                   << " --dir " << data_dir << std::endl;
         return false;
     }
@@ -167,13 +173,19 @@ bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& d
     HIP_CHECK(hipMalloc(&d_A, size_A));
     HIP_CHECK(hipMalloc(&d_B_packed, size_B));
     HIP_CHECK(hipMalloc(&d_scales, size_scales));
-    HIP_CHECK(hipMalloc(&d_zeros, size_zeros));
+    if(use_zeros)
+    {
+        HIP_CHECK(hipMalloc(&d_zeros, size_zeros));
+    }
     HIP_CHECK(hipMalloc(&d_C, size_C));
 
     HIP_CHECK(hipMemcpy(d_A, h_A.data(), size_A, hipMemcpyHostToDevice));
     HIP_CHECK(hipMemcpy(d_B_packed, h_B_packed.data(), size_B, hipMemcpyHostToDevice));
     HIP_CHECK(hipMemcpy(d_scales, h_scales.data(), size_scales, hipMemcpyHostToDevice));
-    HIP_CHECK(hipMemcpy(d_zeros, h_zeros.data(), size_zeros, hipMemcpyHostToDevice));
+    if(use_zeros)
+    {
+        HIP_CHECK(hipMemcpy(d_zeros, h_zeros.data(), size_zeros, hipMemcpyHostToDevice));
+    }
     HIP_CHECK(hipMemset(d_C, 0, size_C));
 
     miopenHandle_t handle;
@@ -207,7 +219,7 @@ bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& d
         hipFree(d_A);
         hipFree(d_B_packed);
         hipFree(d_scales);
-        hipFree(d_zeros);
+        if(d_zeros) hipFree(d_zeros);
         hipFree(d_C);
         miopenDestroy(handle);
         return false;
@@ -232,7 +244,8 @@ bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& d
     double avg_ms    = mr.median_ms / niters;
     double gflops    = (2.0 * M * N * K) / (avg_ms * 1e6);
     double mem_bytes = static_cast<double>(countA) * 2 + static_cast<double>(countB)
-                     + static_cast<double>(countS) * 2 + static_cast<double>(countZ) * 2
+                     + static_cast<double>(countS) * 2
+                     + (use_zeros ? static_cast<double>(countZ) * 2 : 0.0)
                      + static_cast<double>(countC) * 2;
     double bw_gbs    = mem_bytes * niters / (mr.median_ms * 1e6);
     double range_pct = (mr.max_ms - mr.min_ms) / mr.median_ms * 100.0;
@@ -302,7 +315,7 @@ bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& d
     hipFree(d_A);
     hipFree(d_B_packed);
     hipFree(d_scales);
-    hipFree(d_zeros);
+    if(d_zeros) hipFree(d_zeros);
     hipFree(d_C);
     miopenDestroy(handle);
 
@@ -327,22 +340,33 @@ int main(int argc, char* argv[])
 
     int M = 128, N = 128, K = 128, gs = 128;
     std::string data_dir = "data";
+    bool use_zeros = true;
 
-    if(argc >= 2)
+    // Scan for --no-zeros flag in any position
+    for(int i = 1; i < argc; i++)
+    {
+        if(std::string(argv[i]) == "--no-zeros")
+            use_zeros = false;
+    }
+
+    if(argc >= 2 && std::string(argv[1]) != "--no-zeros")
     {
         if(sscanf(argv[1], "%dx%dx%d", &M, &K, &N) != 3)
         {
-            std::cerr << "Usage: " << argv[0] << " [MxKxN] [group_size] [data_dir]" << std::endl;
+            std::cerr << "Usage: " << argv[0]
+                      << " [MxKxN] [group_size] [data_dir] [--no-zeros]" << std::endl;
             return 1;
         }
     }
-    if(argc >= 3) gs = atoi(argv[2]);
-    if(argc >= 4) data_dir = argv[3];
+    if(argc >= 3 && std::string(argv[2]) != "--no-zeros") gs = atoi(argv[2]);
+    if(argc >= 4 && std::string(argv[3]) != "--no-zeros") data_dir = argv[3];
 
     std::cout << "Data dir: " << data_dir << std::endl;
+    if(!use_zeros)
+        std::cout << "Zero points: disabled (--no-zeros)" << std::endl;
 
     bool all_pass = true;
-    all_pass &= test_gemm_fp16_u4(M, N, K, gs, data_dir);
+    all_pass &= test_gemm_fp16_u4(M, N, K, gs, data_dir, use_zeros);
 
     std::cout << "\n=============================================================" << std::endl;
     std::cout << "Overall: " << (all_pass ? "ALL PASSED" : "SOME FAILED") << std::endl;

@@ -43,6 +43,7 @@ NetworkConfig ProblemDescription::MakeNetworkConfig() const
     ss << "k" << K;
     ss << "gs" << group_size;
     ss << "ng" << num_groups_k;
+    ss << "uz" << static_cast<int>(use_zeros);
 
     return NetworkConfig{ss.str()};
 }

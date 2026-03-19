@@ -6,12 +6,14 @@
 
 **计算公式**：`C[M×N] = A[M×K] × dequant(B_packed[N×K/2])^T`
 
+反量化：`dequant(x) = (x - zero) × scale`（有 zero point 时）或 `dequant(x) = x × scale`（zeros = NULL 时）
+
 | 张量 | 数据类型 | 布局 | 说明 |
 |------|----------|------|------|
 | A | FP16 | col-major (M×K) | 输入激活 |
 | B_packed | UINT4 packed | N×K/2 bytes | 每 byte 存 2 个 4-bit 权重 |
 | scales | FP16 | N × num_groups_k | 每列每组一个 scale |
-| zeros | FP16 | N × num_groups_k | 每列每组一个 zero point |
+| zeros | FP16 | N × num_groups_k | 每列每组一个 zero point（可选，传 NULL 则视为 0） |
 | C | FP16 | col-major (M×N) | 输出 |
 
 **硬件要求**：AMD RDNA3+ GPU（gfx1100 / gfx1101 / gfx1102 / gfx1150 / gfx1151 / gfx12xx）
@@ -295,6 +297,9 @@ make gendata
 
 # 自定义尺寸
 make gendata SIZE=256x512x256 GS=128
+
+# 不使用 zero points
+make gendata SIZE=128x128x128 GS=128 NO_ZEROS=1
 ```
 
 需要 Python + NumPy（WSL 中使用 `python3`，Windows 中使用 `python`，Makefile 会自动选择）。
@@ -311,6 +316,9 @@ make run_custom ARGS="2048x4096x4096 128"
 
 # 生成数据 + 运行（一步到位）
 make test SIZE=256x256x256 GS=128
+
+# 不使用 zero points（生成数据 + 运行）
+make test SIZE=128x128x128 GS=128 NO_ZEROS=1
 
 # 运行全部预设测试用例（4 组小尺寸正确性验证）
 make test_all
@@ -364,11 +372,14 @@ miopenStatus_t miopenGemmFp16U4Forward(
     const void* A, int lda,      // FP16 输入矩阵 (col-major, lda >= M)
     const void* B_packed,        // UINT4 packed 权重 (N × K/2 bytes)
     const void* scales,          // FP16 scale (N × num_groups_k)
-    const void* zeros,           // FP16 zero point (N × num_groups_k)
+    const void* zeros,           // FP16 zero point (N × num_groups_k), 或 NULL
     int group_size,              // 量化分组大小 (沿 K 维)
     int num_groups_k,            // K 维分组数 (= K / group_size)
     void* C, int ldc);           // FP16 输出矩阵 (col-major, ldc >= M)
 ```
+
+> **zeros 是可选的**：传入 `NULL` 时，kernel 视 zero point 为 0，即反量化公式简化为 `val = uint4_val × scale`。
+> 有 zero point 时公式为 `val = (uint4_val - zero) × scale`。
 
 > **重要**：调用方必须在 `#include <miopen/miopen.h>` **之前** 定义 `#define MIOPEN_BETA_API 1`，
 > 否则编译器看不到 `miopenGemmFp16U4Forward` 的声明。
@@ -415,20 +426,70 @@ OFFLOAD := --offload-arch=gfx1200    # RDNA4 (Radeon RX 9070 等)
 | 270+ `dllimport is not supported` 警告 | hipcc/clang 不支持 MSVC declspec | 无害，忽略 |
 | Windows .exe 在 WSL 中找不到 DLL | DLL 搜索走 Windows 规则 | 用 `cmd.exe /c "set PATH=... && xxx.exe"` 运行 |
 | `make: hipcc: No such file or directory` | WSL 中没找到 hipcc | Makefile 中用完整路径 `/mnt/c/AMD/ROCm/7.1/bin/hipcc.exe` |
+| 修改 kernel 后重编 MIOpen，测试结果不变 | MIOpen JIT 缓存了旧的编译好的 kernel binary | 清理 JIT 缓存（见下方说明）后重新运行 |
+
+### 清理 MIOpen JIT 缓存
+
+MIOpen 会把 JIT 编译好的 GPU kernel binary 缓存到磁盘（与 build 目录无关）。
+如果修改了 kernel 源码（`MIOpenGemmFp16U4.cpp`）并重编了 MIOpen，但运行结果不变或出错，
+说明 MIOpen 还在使用缓存中的旧 kernel binary。需要手动清理：
+
+**PowerShell**：
+
+```powershell
+Remove-Item -Recurse -Force "$env:USERPROFILE\.miopen\cache"
+```
+
+**WSL**：
+
+```bash
+rm -rf ~/.miopen/cache
+```
+
+> 缓存路径为 `C:\Users\<用户名>\.miopen\cache\`（Windows）或 `~/.miopen/cache`（Linux/WSL）。
+> 清理后首次运行会触发 JIT 重新编译（warmup 变慢约 500-1000ms），后续调用恢复正常速度。
 
 ---
 
 ## 七、开发者备忘
 
-### 修改 kernel 后的增量编译
+### 修改后的编译策略
 
-修改 `src/kernels/MIOpenGemmFp16U4.cpp` 后，`ninja` 会自动重新 inline kernel 并重链接。
-通常只需编译 2-4 个目标，十几秒即可完成。
+MIOpen 中的文件分两类，编译方式不同：
+
+| 修改的文件 | 类型 | 编译方式 | 是否需要清 JIT 缓存 |
+|-----------|------|---------|-------------------|
+| `src/kernels/MIOpenGemmFp16U4.cpp` | GPU Kernel（JIT 编译） | `ninja -j8` + 清缓存 | **是** |
+| `src/gemm_fp16_u4.cpp` | C++ API 实现 | `ninja -j8` | 否 |
+| `src/gemm_fp16_u4_api.cpp` | C API 封装 | `ninja -j8` | 否 |
+| `src/solver/gemm_fp16_u4/forward_gemm_fp16_u4.cpp` | Solver（Grid/编译选项） | `ninja -j8` + 清缓存 | **是** |
+| `src/gemm_fp16_u4/problem_description.cpp` | NetworkConfig 生成 | `ninja -j8` + 清缓存 | **是** |
+| `src/include/miopen/gemm_fp16_u4/*.hpp` | 头文件 | `ninja -j8`（自动重编依赖它的 .cpp） | 视情况 |
+| `include/miopen/miopen.h` | 公共 C API 头 | `ninja -j8` | 否 |
+
+**原则**：
+- 只要改的是**普通 C++ 源文件**（编译进 DLL 的），`ninja -j8` 增量编译即可，几十秒搞定。
+- 如果改的文件影响 **kernel 的 JIT 编译结果**（kernel 源码、solver 的编译选项、NetworkConfig 缓存键），
+  必须**额外清理 JIT 缓存**，否则 MIOpen 运行时会继续使用旧的缓存 kernel binary。
+
+所有情况都**不需要 `ninja clean`**。`ninja` 的依赖追踪会自动识别哪些文件需要重编。
+
+#### 清理 JIT 缓存
+
+**PowerShell**：
 
 ```powershell
-cd M:\build
-ninja -j8
+Remove-Item -Recurse -Force "$env:USERPROFILE\.miopen\cache"
 ```
+
+**WSL**：
+
+```bash
+rm -rf ~/.miopen/cache
+```
+
+> 缓存路径为 `C:\Users\<用户名>\.miopen\cache\`（Windows）或 `~/.miopen/cache`（Linux/WSL）。
+> 清理后首次运行会触发 JIT 重新编译（warmup 变慢约 500-1000ms），后续调用恢复正常速度。
 
 ### GemmFp16U4 在 MIOpen 中的调用链
 

@@ -23,30 +23,28 @@
  * SOFTWARE.
  *
  *******************************************************************************/
+#ifndef MIOPEN_GEMM_FP16_U4_HPP_
+#define MIOPEN_GEMM_FP16_U4_HPP_
 
-#include <miopen/gemmdq/problem_description.hpp>
-#include <miopen/names.hpp>
-
-#include <sstream>
+#include <miopen/common.hpp>
 
 namespace miopen {
 
-namespace gemmdq {
+struct Handle;
 
-NetworkConfig ProblemDescription::MakeNetworkConfig() const
-{
-    std::ostringstream ss;
-
-    ss << "gemmdqfwd";
-    ss << "m" << M;
-    ss << "n" << N;
-    ss << "k" << K;
-    ss << "gs" << group_size;
-    ss << "ng" << num_groups_k;
-
-    return NetworkConfig{ss.str()};
-}
-
-} // namespace gemmdq
+MIOPEN_INTERNALS_EXPORT miopenStatus_t GemmFp16U4Forward(const Handle& handle,
+                                                         int M,
+                                                         int N,
+                                                         int K,
+                                                         ConstData_t A,
+                                                         int lda,
+                                                         ConstData_t B_packed,
+                                                         ConstData_t scales,
+                                                         ConstData_t zeros,
+                                                         int group_size,
+                                                         int num_groups_k,
+                                                         Data_t C,
+                                                         int ldc);
 
 } // namespace miopen
+#endif // MIOPEN_GEMM_FP16_U4_HPP_

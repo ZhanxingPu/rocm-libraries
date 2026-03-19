@@ -29,22 +29,22 @@
 #include <miopen/invoke_params.hpp>
 
 namespace miopen {
-namespace gemmdq {
+namespace gemm_fp16_u4 {
 
-struct GemmDqInvokeParams : public miopen::InvokeParams
+struct GemmFp16U4InvokeParams : public miopen::InvokeParams
 {
-    GemmDqInvokeParams(int M_,
-                       int N_,
-                       int K_,
-                       ConstData_t A_,
-                       int lda_,
-                       ConstData_t B_packed_,
-                       ConstData_t scales_,
-                       ConstData_t zeros_,
-                       int group_size_,
-                       int num_groups_k_,
-                       Data_t C_,
-                       int ldc_)
+    GemmFp16U4InvokeParams(int M_,
+                           int N_,
+                           int K_,
+                           ConstData_t A_,
+                           int lda_,
+                           ConstData_t B_packed_,
+                           ConstData_t scales_,
+                           ConstData_t zeros_,
+                           int group_size_,
+                           int num_groups_k_,
+                           Data_t C_,
+                           int ldc_)
         : M(M_),
           N(N_),
           K(K_),
@@ -77,5 +77,5 @@ struct GemmDqInvokeParams : public miopen::InvokeParams
     Data_t GetWorkspace() const { return nullptr; }
 };
 
-} // namespace gemmdq
+} // namespace gemm_fp16_u4
 } // namespace miopen

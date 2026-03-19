@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-GemmDq test data generator + NumPy reference
+GemmFp16U4 test data generator + NumPy reference
 
 Generates random FP16 A, UINT4-packed B, scales, zeros, and computes
 the golden reference C = A @ dequant(B)^T using NumPy.
 
 Usage:
-    python3 gen_gemm_dq_data.py [MxKxN] [--group-size GS] [--dir DIR]
+    python3 gen_gemm_fp16_u4_data.py [MxKxN] [--group-size GS] [--dir DIR]
 
 Examples:
-    python3 gen_gemm_dq_data.py                          # 128x128x128 gs=128
-    python3 gen_gemm_dq_data.py 256x512x256 --group-size 128
+    python3 gen_gemm_fp16_u4_data.py                          # 128x128x128 gs=128
+    python3 gen_gemm_fp16_u4_data.py 256x512x256 --group-size 128
 """
 
 import numpy as np
@@ -20,7 +20,7 @@ import time
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate GemmDq test data')
+    parser = argparse.ArgumentParser(description='Generate GemmFp16U4 test data')
     parser.add_argument('size', nargs='?', type=str, default='128x128x128',
                         help='Matrix size MxKxN (default: 128x128x128)')
     parser.add_argument('--group-size', type=int, default=128,
@@ -48,7 +48,7 @@ def main():
     out_dir = args.dir
     os.makedirs(out_dir, exist_ok=True)
 
-    print(f"GemmDq Data Generator")
+    print(f"GemmFp16U4 Data Generator")
     print(f"  M={M}, N={N}, K={K}, group_size={group_size}")
     print(f"  num_groups_k={num_groups_k}")
     print(f"  A: FP16 col-major (M x K)")
@@ -86,22 +86,22 @@ def main():
 
     # ---- Save binary files ----
     # A: col-major (Fortran order)
-    file_A = os.path.join(out_dir, "gemm_dq_A.bin")
+    file_A = os.path.join(out_dir, "gemm_fp16_u4_A.bin")
     A.flatten(order='F').tofile(file_A)
     print(f"\nSaved {file_A} ({os.path.getsize(file_A) / 1024:.1f} KB)")
 
     # B_packed: row-major (C order) => layout [n * (K/2) + k/2]
-    file_B = os.path.join(out_dir, "gemm_dq_B_packed.bin")
+    file_B = os.path.join(out_dir, "gemm_fp16_u4_B_packed.bin")
     B_packed.flatten(order='C').tofile(file_B)
     print(f"Saved {file_B} ({os.path.getsize(file_B) / 1024:.1f} KB)")
 
     # scales: row-major => layout [n * num_groups_k + g]
-    file_S = os.path.join(out_dir, "gemm_dq_scales.bin")
+    file_S = os.path.join(out_dir, "gemm_fp16_u4_scales.bin")
     scales.flatten(order='C').tofile(file_S)
     print(f"Saved {file_S} ({os.path.getsize(file_S) / 1024:.1f} KB)")
 
     # zeros: row-major => layout [n * num_groups_k + g]
-    file_Z = os.path.join(out_dir, "gemm_dq_zeros.bin")
+    file_Z = os.path.join(out_dir, "gemm_fp16_u4_zeros.bin")
     zeros.flatten(order='C').tofile(file_Z)
     print(f"Saved {file_Z} ({os.path.getsize(file_Z) / 1024:.1f} KB)")
 
@@ -128,7 +128,7 @@ def main():
         print(f"  Time: {elapsed:.3f} s ({gflops:.1f} GFLOPS on CPU)")
 
         # Save C_ref col-major (Fortran order) as FP16
-        file_C = os.path.join(out_dir, "gemm_dq_C_ref.bin")
+        file_C = os.path.join(out_dir, "gemm_fp16_u4_C_ref.bin")
         C_ref.flatten(order='F').tofile(file_C)
         print(f"Saved {file_C} ({os.path.getsize(file_C) / 1024:.1f} KB)")
 
@@ -144,7 +144,7 @@ def main():
         print("\nSkipping reference computation (--no-ref)")
 
     # ---- Metadata ----
-    meta_file = os.path.join(out_dir, "gemm_dq_meta.txt")
+    meta_file = os.path.join(out_dir, "gemm_fp16_u4_meta.txt")
     with open(meta_file, 'w') as f:
         f.write(f"M={M}\n")
         f.write(f"N={N}\n")
@@ -158,8 +158,8 @@ def main():
         f.write(f"scales_zeros_layout=row-major\n")
 
     print(f"\nFiles generated in {os.path.abspath(out_dir)}/:")
-    for fn in ["gemm_dq_A.bin", "gemm_dq_B_packed.bin", "gemm_dq_scales.bin",
-               "gemm_dq_zeros.bin", "gemm_dq_C_ref.bin", "gemm_dq_meta.txt"]:
+    for fn in ["gemm_fp16_u4_A.bin", "gemm_fp16_u4_B_packed.bin", "gemm_fp16_u4_scales.bin",
+               "gemm_fp16_u4_zeros.bin", "gemm_fp16_u4_C_ref.bin", "gemm_fp16_u4_meta.txt"]:
         fp = os.path.join(out_dir, fn)
         if os.path.exists(fp):
             sz = os.path.getsize(fp)

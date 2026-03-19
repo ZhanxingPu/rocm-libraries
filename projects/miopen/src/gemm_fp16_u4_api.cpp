@@ -23,35 +23,35 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#include <miopen/gemmdq.hpp>
+#include <miopen/gemm_fp16_u4.hpp>
 #include <miopen/errors.hpp>
 #include <miopen/handle.hpp>
 #include <miopen/logger.hpp>
 
-extern "C" miopenStatus_t miopenGemmDqForward(miopenHandle_t handle,
-                                              int M,
-                                              int N,
-                                              int K,
-                                              const void* A,
-                                              int lda,
-                                              const void* B_packed,
-                                              const void* scales,
-                                              const void* zeros,
-                                              int group_size,
-                                              int num_groups_k,
-                                              void* C,
-                                              int ldc)
+extern "C" miopenStatus_t miopenGemmFp16U4Forward(miopenHandle_t handle,
+                                                   int M,
+                                                   int N,
+                                                   int K,
+                                                   const void* A,
+                                                   int lda,
+                                                   const void* B_packed,
+                                                   const void* scales,
+                                                   const void* zeros,
+                                                   int group_size,
+                                                   int num_groups_k,
+                                                   void* C,
+                                                   int ldc)
 {
     MIOPEN_LOG_FUNCTION(handle, M, N, K, A, lda, B_packed, scales, zeros,
                         group_size, num_groups_k, C, ldc);
     return miopen::try_([&] {
-        miopen::GemmDqForward(miopen::deref(handle),
-                              M, N, K,
-                              DataCast(A), lda,
-                              DataCast(B_packed),
-                              DataCast(scales),
-                              DataCast(zeros),
-                              group_size, num_groups_k,
-                              DataCast(C), ldc);
+        miopen::GemmFp16U4Forward(miopen::deref(handle),
+                                  M, N, K,
+                                  DataCast(A), lda,
+                                  DataCast(B_packed),
+                                  DataCast(scales),
+                                  DataCast(zeros),
+                                  group_size, num_groups_k,
+                                  DataCast(C), ldc);
     });
 }

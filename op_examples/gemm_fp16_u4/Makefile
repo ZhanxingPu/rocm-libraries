@@ -1,5 +1,5 @@
 # ============================================================
-# MIOpen GemmDq (Fused GEMM + Dequantization) Test
+# MIOpen GemmFp16U4 (Fused GEMM + Dequantization) Test
 #
 # Works in both WSL and Windows CMD/PowerShell.
 #
@@ -55,7 +55,7 @@ INCLUDES := -I$(MIOPEN_SRC)/include \
 
 LDFLAGS := -L$(MIOPEN_BUILD)/lib -lMIOpen
 
-TARGET := test_gemm_dq.exe
+TARGET := test_gemm_fp16_u4.exe
 
 # Default test parameters
 SIZE     ?= 128x128x128
@@ -88,14 +88,14 @@ endif
 
 all: $(TARGET)
 
-$(TARGET): test_gemm_dq.cpp
+$(TARGET): test_gemm_fp16_u4.cpp
 	$(HIPCC) $(CXXFLAGS) $(OFFLOAD) $< -o $@ $(INCLUDES) $(LDFLAGS)
 
 clean:
 	$(DO_CLEAN)
 
 gendata:
-	$(PYTHON) gen_gemm_dq_data.py $(SIZE) --group-size $(GS) --dir $(DATA_DIR)
+	$(PYTHON) gen_gemm_fp16_u4_data.py $(SIZE) --group-size $(GS) --dir $(DATA_DIR)
 
 run: $(TARGET)
 	$(RUN_CMD) $(SIZE) $(GS) $(DATA_DIR)
@@ -107,13 +107,13 @@ test: gendata $(TARGET)
 	$(RUN_CMD) $(SIZE) $(GS) $(DATA_DIR)
 
 test_all: $(TARGET)
-	$(PYTHON) gen_gemm_dq_data.py 128x128x128 --group-size 128 --dir $(DATA_DIR)
+	$(PYTHON) gen_gemm_fp16_u4_data.py 128x128x128 --group-size 128 --dir $(DATA_DIR)
 	$(RUN_CMD) 128x128x128 128 $(DATA_DIR)
-	$(PYTHON) gen_gemm_dq_data.py 128x256x128 --group-size 128 --dir $(DATA_DIR)
+	$(PYTHON) gen_gemm_fp16_u4_data.py 128x256x128 --group-size 128 --dir $(DATA_DIR)
 	$(RUN_CMD) 128x256x128 128 $(DATA_DIR)
-	$(PYTHON) gen_gemm_dq_data.py 256x256x256 --group-size 128 --dir $(DATA_DIR)
+	$(PYTHON) gen_gemm_fp16_u4_data.py 256x256x256 --group-size 128 --dir $(DATA_DIR)
 	$(RUN_CMD) 256x256x256 128 $(DATA_DIR)
-	$(PYTHON) gen_gemm_dq_data.py 256x512x256 --group-size 128 --dir $(DATA_DIR)
+	$(PYTHON) gen_gemm_fp16_u4_data.py 256x512x256 --group-size 128 --dir $(DATA_DIR)
 	$(RUN_CMD) 256x512x256 128 $(DATA_DIR)
 
 .PHONY: all clean run run_custom gendata test test_all

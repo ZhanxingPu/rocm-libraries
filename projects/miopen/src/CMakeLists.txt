@@ -67,8 +67,8 @@ set( MIOpen_Source
     buffer_info.cpp
     cat_api.cpp
     cat/problem_description.cpp
-    gemmdq_api.cpp
-    gemmdq/problem_description.cpp
+    gemm_fp16_u4_api.cpp
+    gemm_fp16_u4/problem_description.cpp
     check_numerics.cpp
     conv/invokers/gcn_asm_1x1u.cpp
     conv/invokers/gcn_asm_1x1u_ss.cpp
@@ -196,7 +196,7 @@ set( MIOpen_Source
     solver/batchnorm/forward_per_activation_fused.cpp
     solver/batchnorm/forward_spatial.cpp
     solver/cat/forward_cat.cpp
-    solver/gemmdq/forward_gemmdq.cpp
+    solver/gemm_fp16_u4/forward_gemm_fp16_u4.cpp
     solver/conv/conv_asm_1x1u.cpp
     solver/conv/conv_asm_1x1u_stride2.cpp
     solver/conv/conv_asm_3x3u.cpp
@@ -558,7 +558,7 @@ if( MIOPEN_BACKEND MATCHES "OpenCL" OR MIOPEN_BACKEND STREQUAL "HIPOC" OR MIOPEN
         kernels/MIOpenAdam.cpp
         kernels/MIOpenAddLayerNorm.cpp
         kernels/MIOpenCat.cpp
-        kernels/MIOpenGemmDq.cpp
+        kernels/MIOpenGemmFp16U4.cpp
         kernels/MIOpenCheckNumerics.cpp
         kernels/MIOpenBatchNormActivBwdPerAct.cpp
         kernels/MIOpenBatchNormActivBwdSpatial.cpp
@@ -727,7 +727,7 @@ if( MIOPEN_BACKEND MATCHES "OpenCL" OR MIOPEN_BACKEND STREQUAL "HIPOC" OR MIOPEN
         adam.cpp
         addlayernorm.cpp
         cat.cpp
-        gemmdq.cpp
+        gemm_fp16_u4.cpp
         exec_utils.cpp
         groupnorm.cpp
         getitem.cpp

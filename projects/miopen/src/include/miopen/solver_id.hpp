@@ -65,7 +65,7 @@ enum class Primitive
     Kthvalue,
     SoftMarginLoss,
     MultiMarginLoss,
-    GemmDq
+    GemmFp16U4
 };
 
 struct Id

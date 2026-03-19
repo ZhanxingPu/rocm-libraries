@@ -23,28 +23,37 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#ifndef MIOPEN_GEMMDQ_HPP_
-#define MIOPEN_GEMMDQ_HPP_
-
-#include <miopen/common.hpp>
+#include <miopen/gemm_fp16_u4.hpp>
+#include <miopen/gemm_fp16_u4/invoke_params.hpp>
+#include <miopen/gemm_fp16_u4/solvers.hpp>
+#include <miopen/find_solution.hpp>
 
 namespace miopen {
 
-struct Handle;
+miopenStatus_t GemmFp16U4Forward(const Handle& handle,
+                                 int M,
+                                 int N,
+                                 int K,
+                                 ConstData_t A,
+                                 int lda,
+                                 ConstData_t B_packed,
+                                 ConstData_t scales,
+                                 ConstData_t zeros,
+                                 int group_size,
+                                 int num_groups_k,
+                                 Data_t C,
+                                 int ldc)
+{
+    const auto problem =
+        gemm_fp16_u4::ProblemDescription{M, N, K, group_size, num_groups_k};
+    const auto invoke_params =
+        gemm_fp16_u4::GemmFp16U4InvokeParams{M, N, K, A, lda, B_packed, scales, zeros,
+                                              group_size, num_groups_k, C, ldc};
+    const auto algo    = AlgorithmName{"GemmFp16U4Forward"};
+    const auto solvers = solver::SolverContainer<solver::gemm_fp16_u4::GemmFp16U4Forward>{};
+    solvers.ExecutePrimitive(handle, problem, algo, invoke_params);
 
-MIOPEN_INTERNALS_EXPORT miopenStatus_t GemmDqForward(const Handle& handle,
-                                                     int M,
-                                                     int N,
-                                                     int K,
-                                                     ConstData_t A,
-                                                     int lda,
-                                                     ConstData_t B_packed,
-                                                     ConstData_t scales,
-                                                     ConstData_t zeros,
-                                                     int group_size,
-                                                     int num_groups_k,
-                                                     Data_t C,
-                                                     int ldc);
+    return miopenStatusSuccess;
+}
 
 } // namespace miopen
-#endif // MIOPEN_GEMMDQ_HPP_

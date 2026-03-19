@@ -23,37 +23,30 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#include <miopen/gemmdq.hpp>
-#include <miopen/gemmdq/invoke_params.hpp>
-#include <miopen/gemmdq/solvers.hpp>
-#include <miopen/find_solution.hpp>
+
+#include <miopen/gemm_fp16_u4/problem_description.hpp>
+#include <miopen/names.hpp>
+
+#include <sstream>
 
 namespace miopen {
 
-miopenStatus_t GemmDqForward(const Handle& handle,
-                             int M,
-                             int N,
-                             int K,
-                             ConstData_t A,
-                             int lda,
-                             ConstData_t B_packed,
-                             ConstData_t scales,
-                             ConstData_t zeros,
-                             int group_size,
-                             int num_groups_k,
-                             Data_t C,
-                             int ldc)
-{
-    const auto problem =
-        gemmdq::ProblemDescription{M, N, K, group_size, num_groups_k};
-    const auto invoke_params =
-        gemmdq::GemmDqInvokeParams{M, N, K, A, lda, B_packed, scales, zeros,
-                                   group_size, num_groups_k, C, ldc};
-    const auto algo    = AlgorithmName{"GemmDqForward"};
-    const auto solvers = solver::SolverContainer<solver::gemmdq::GemmDqForward>{};
-    solvers.ExecutePrimitive(handle, problem, algo, invoke_params);
+namespace gemm_fp16_u4 {
 
-    return miopenStatusSuccess;
+NetworkConfig ProblemDescription::MakeNetworkConfig() const
+{
+    std::ostringstream ss;
+
+    ss << "gemmfp16u4fwd";
+    ss << "m" << M;
+    ss << "n" << N;
+    ss << "k" << K;
+    ss << "gs" << group_size;
+    ss << "ng" << num_groups_k;
+
+    return NetworkConfig{ss.str()};
 }
+
+} // namespace gemm_fp16_u4
 
 } // namespace miopen

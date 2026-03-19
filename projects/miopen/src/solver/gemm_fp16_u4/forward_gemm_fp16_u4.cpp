@@ -24,10 +24,10 @@
  *
  *******************************************************************************/
 
-#include <miopen/gemmdq/solvers.hpp>
+#include <miopen/gemm_fp16_u4/solvers.hpp>
 
-#include <miopen/gemmdq/invoke_params.hpp>
-#include <miopen/gemmdq.hpp>
+#include <miopen/gemm_fp16_u4/invoke_params.hpp>
+#include <miopen/gemm_fp16_u4.hpp>
 #include <miopen/kernel_build_params.hpp>
 #include <miopen/target_properties.hpp>
 
@@ -35,10 +35,10 @@ namespace miopen {
 
 namespace solver {
 
-namespace gemmdq {
+namespace gemm_fp16_u4 {
 
-bool GemmDqForward::IsApplicable([[maybe_unused]] const ExecutionContext& context,
-                                 const miopen::gemmdq::ProblemDescription& problem) const
+bool GemmFp16U4Forward::IsApplicable([[maybe_unused]] const ExecutionContext& context,
+                                     const miopen::gemm_fp16_u4::ProblemDescription& problem) const
 {
     int M = problem.GetM();
     int N = problem.GetN();
@@ -50,8 +50,8 @@ bool GemmDqForward::IsApplicable([[maybe_unused]] const ExecutionContext& contex
     return true;
 }
 
-ConvSolution GemmDqForward::GetSolution([[maybe_unused]] const ExecutionContext& context,
-                                        const miopen::gemmdq::ProblemDescription& problem) const
+ConvSolution GemmFp16U4Forward::GetSolution([[maybe_unused]] const ExecutionContext& context,
+                                            const miopen::gemm_fp16_u4::ProblemDescription& problem) const
 {
     auto result = ConvSolution{miopenStatusSuccess};
 
@@ -79,14 +79,14 @@ ConvSolution GemmDqForward::GetSolution([[maybe_unused]] const ExecutionContext&
     kernel.g_wk.push_back(grid_y);
     kernel.g_wk.push_back(1);
 
-    kernel.kernel_file = "MIOpenGemmDq.cpp";
-    kernel.kernel_name = "GemmDqFusedWmmaForward";
+    kernel.kernel_file = "MIOpenGemmFp16U4.cpp";
+    kernel.kernel_name = "GemmFp16U4FusedWmmaForward";
 
     result.invoker_factory = [](const std::vector<Kernel>& kernels) {
         return [=](const Handle& handle_, const AnyInvokeParams& raw_params) {
             decltype(auto) k = handle_.Run(kernels.front());
             decltype(auto) params =
-                raw_params.CastTo<miopen::gemmdq::GemmDqInvokeParams>();
+                raw_params.CastTo<miopen::gemm_fp16_u4::GemmFp16U4InvokeParams>();
 
             k(params.M,
               params.N,
@@ -108,7 +108,7 @@ ConvSolution GemmDqForward::GetSolution([[maybe_unused]] const ExecutionContext&
     return result;
 }
 
-} // namespace gemmdq
+} // namespace gemm_fp16_u4
 
 } // namespace solver
 

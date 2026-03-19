@@ -20,7 +20,7 @@
 #include <miopen/softmarginloss/solvers.hpp>
 #include <miopen/softmax/solvers.hpp>
 #include <miopen/multimarginloss/solvers.hpp>
-#include <miopen/gemmdq/solvers.hpp>
+#include <miopen/gemm_fp16_u4/solvers.hpp>
 
 #include <miopen/conv_algo_name.hpp>
 #include <miopen/db.hpp>
@@ -813,7 +813,7 @@ inline SolverRegistrar::SolverRegistrar(IdRegistryData& registry)
                        ++id,
                        conv::TransposedConvMPBidirectWinograd_xdlops<6, 3>{},
                        miopenConvolutionAlgoWinograd);
-    Register(registry, ++id, Primitive::GemmDq, gemmdq::GemmDqForward{}.SolverDbId());
+    Register(registry, ++id, Primitive::GemmFp16U4, gemm_fp16_u4::GemmFp16U4Forward{}.SolverDbId());
     //  IMPORTANT: New solvers should be added to the end of the function, and don't leave a white
     //  space between this comment and the newly registered solver(s)!
 }

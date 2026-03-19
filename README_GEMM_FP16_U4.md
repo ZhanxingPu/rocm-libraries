@@ -1,8 +1,8 @@
-# GemmDq — Fused GEMM + Dequantization 算子 (RDNA3 WMMA)
+# GemmFp16U4 — Fused GEMM + Dequantization 算子 (RDNA3 WMMA)
 
 ## 概述
 
-本项目在 MIOpen 框架中新增了 `GemmDq` 算子，实现了 **FP16 GEMM + UINT4 权重反量化融合** 的高性能 GPU Kernel。
+本项目在 MIOpen 框架中新增了 `GemmFp16U4` 算子，实现了 **FP16 GEMM + UINT4 权重反量化融合** 的高性能 GPU Kernel。
 
 **计算公式**：`C[M×N] = A[M×K] × dequant(B_packed[N×K/2])^T`
 
@@ -23,27 +23,27 @@
 ```
 rocm-libraries/
 ├── projects/miopen/
-│   ├── include/miopen/miopen.h              # C API 声明 (miopenGemmDqForward)
+│   ├── include/miopen/miopen.h              # C API 声明 (miopenGemmFp16U4Forward)
 │   ├── src/
 │   │   ├── include/miopen/
-│   │   │   ├── gemmdq.hpp                   # C++ API
-│   │   │   └── gemmdq/
+│   │   │   ├── gemm_fp16_u4.hpp             # C++ API
+│   │   │   └── gemm_fp16_u4/
 │   │   │       ├── problem_description.hpp  # 参数校验 + NetworkConfig
 │   │   │       ├── invoke_params.hpp        # Kernel 调用参数封装
 │   │   │       └── solvers.hpp             # Solver 声明
-│   │   ├── gemmdq/
+│   │   ├── gemm_fp16_u4/
 │   │   │   └── problem_description.cpp     # MakeNetworkConfig 实现
-│   │   ├── gemmdq.cpp                       # 主实现
-│   │   ├── gemmdq_api.cpp                   # C API 封装
-│   │   ├── solver/gemmdq/
-│   │   │   └── forward_gemmdq.cpp          # Solver (Grid/Block 配置 + Invoker)
-│   │   ├── kernels/MIOpenGemmDq.cpp         # ★ GPU Kernel (JIT 编译)
-│   │   ├── solver.cpp                       # (已修改) 注册 GemmDq solver
+│   │   ├── gemm_fp16_u4.cpp                 # 主实现
+│   │   ├── gemm_fp16_u4_api.cpp             # C API 封装
+│   │   ├── solver/gemm_fp16_u4/
+│   │   │   └── forward_gemm_fp16_u4.cpp    # Solver (Grid/Block 配置 + Invoker)
+│   │   ├── kernels/MIOpenGemmFp16U4.cpp     # ★ GPU Kernel (JIT 编译)
+│   │   ├── solver.cpp                       # (已修改) 注册 GemmFp16U4 solver
 │   │   └── CMakeLists.txt                   # (已修改) 添加 4 处源文件引用
 │   └── ...
-└── op_examples/gemmdq/
-    ├── test_gemm_dq.cpp                     # 正确性验证 + 性能测试
-    ├── gen_gemm_dq_data.py                  # 测试数据生成 + NumPy 参考实现
+└── op_examples/gemm_fp16_u4/
+    ├── test_gemm_fp16_u4.cpp                # 正确性验证 + 性能测试
+    ├── gen_gemm_fp16_u4_data.py             # 测试数据生成 + NumPy 参考实现
     └── Makefile                             # 跨平台编译/运行脚本（WSL + Windows）
 ```
 
@@ -144,7 +144,7 @@ set(amd_comgr_VERSION_PATCH 0)
 
 ---
 
-## 二、编译 MIOpen 库（含 GemmDq 算子）
+## 二、编译 MIOpen 库（含 GemmFp16U4 算子）
 
 ### 2.1 Clone 本仓库
 
@@ -224,12 +224,12 @@ ninja -j8
 
 ## 三、编译和运行测试程序
 
-测试文件位于本仓库的 `op_examples/gemmdq/` 目录下：
+测试文件位于本仓库的 `op_examples/gemm_fp16_u4/` 目录下：
 
 | 文件 | 说明 |
 |------|------|
-| `test_gemm_dq.cpp` | 正确性验证 + 性能基准测试（调用 `miopenGemmDqForward` C API） |
-| `gen_gemm_dq_data.py` | 生成测试数据（随机 FP16/UINT4）+ NumPy 参考结果 |
+| `test_gemm_fp16_u4.cpp` | 正确性验证 + 性能基准测试（调用 `miopenGemmFp16U4Forward` C API） |
+| `gen_gemm_fp16_u4_data.py` | 生成测试数据（随机 FP16/UINT4）+ NumPy 参考结果 |
 | `Makefile` | 跨平台编译/运行（WSL 和 Windows CMD/PowerShell） |
 
 Makefile 通过 `$(OS)` 自动检测运行环境，WSL 和 Windows CMD/PowerShell 均可直接使用。
@@ -250,7 +250,7 @@ choco install make
 
 ### 3.1 修改 Makefile
 
-打开 `op_examples/gemmdq/Makefile`，修改顶部的变量以匹配你的环境：
+打开 `op_examples/gemm_fp16_u4/Makefile`，修改顶部的变量以匹配你的环境：
 
 ```makefile
 # GPU 架构
@@ -274,14 +274,14 @@ HIP SDK 路径会根据环境自动设置默认值：
 **WSL**：
 
 ```bash
-cd /mnt/c/<WORKSPACE>/rocm-libraries/op_examples/gemmdq
+cd /mnt/c/<WORKSPACE>/rocm-libraries/op_examples/gemm_fp16_u4
 make clean && make
 ```
 
 **Windows CMD/PowerShell**：
 
 ```powershell
-cd <WORKSPACE>\rocm-libraries\op_examples\gemmdq
+cd <WORKSPACE>\rocm-libraries\op_examples\gemm_fp16_u4
 make clean && make
 ```
 
@@ -324,11 +324,11 @@ make test_all
 ### 3.5 预期输出
 
 ```
-MIOpen GemmDq (Fused GEMM + Dequantization) Verification
-========================================================
+MIOpen GemmFp16U4 (Fused GEMM + Dequantization) Verification
+=============================================================
 GPU: AMD Radeon(TM) 890M Graphics (arch: gfx1150)
 
-=== Test GemmDq M=128 N=128 K=128 group_size=128 ===
+=== Test GemmFp16U4 M=128 N=128 K=128 group_size=128 ===
   Loaded input data from data/
   Warmup... OK (1823.45 ms), iters=5
   Benchmarking (5 rounds x 5 iters)... done
@@ -342,7 +342,7 @@ GPU: AMD Radeon(TM) 890M Graphics (arch: gfx1150)
   ...
   Result: PASSED
 
-========================================================
+=============================================================
 Overall: ALL PASSED
 ```
 
@@ -358,7 +358,7 @@ Overall: ALL PASSED
 #define MIOPEN_BETA_API 1    // 必须在 include 之前定义！
 #include <miopen/miopen.h>
 
-miopenStatus_t miopenGemmDqForward(
+miopenStatus_t miopenGemmFp16U4Forward(
     miopenHandle_t handle,
     int M, int N, int K,         // 矩阵维度
     const void* A, int lda,      // FP16 输入矩阵 (col-major, lda >= M)
@@ -371,7 +371,7 @@ miopenStatus_t miopenGemmDqForward(
 ```
 
 > **重要**：调用方必须在 `#include <miopen/miopen.h>` **之前** 定义 `#define MIOPEN_BETA_API 1`，
-> 否则编译器看不到 `miopenGemmDqForward` 的声明。
+> 否则编译器看不到 `miopenGemmFp16U4Forward` 的声明。
 
 ---
 
@@ -379,12 +379,12 @@ miopenStatus_t miopenGemmDqForward(
 
 ### MIOpen 库编译
 
-MIOpen 库编译时 **无需指定 GPU 架构**。GemmDq 的 GPU kernel 是 JIT 编译的（运行时由
+MIOpen 库编译时 **无需指定 GPU 架构**。GemmFp16U4 的 GPU kernel 是 JIT 编译的（运行时由
 MIOpen 自动检测当前 GPU 并编译），所以同一份 `MIOpen.dll` 可以在不同 RDNA3+ GPU 上运行。
 
 ### 测试程序编译
 
-测试程序（`test_gemm_dq.cpp`）使用 `hipcc` 编译，**需要指定目标 GPU 架构**。
+测试程序（`test_gemm_fp16_u4.cpp`）使用 `hipcc` 编译，**需要指定目标 GPU 架构**。
 修改 Makefile 中的 `OFFLOAD` 变量：
 
 ```makefile
@@ -407,11 +407,11 @@ OFFLOAD := --offload-arch=gfx1200    # RDNA4 (Radeon RX 9070 等)
 |------|------|----------|
 | `Could NOT find amd_comgr` | HIP SDK 缺少 CMake 配置 | 按 1.5 节创建 `amd_comgrConfig.cmake` |
 | `AMD COMgr older than 1.7.0` | amd_comgr 版本变量未设置 | 确保 config 文件中设置了 `VERSION_MAJOR/MINOR/PATCH` |
-| `fatal error: 'hip/hip_runtime.h' file not found` + `Code object build failed` | 内核 JIT 编译时找不到 HIP 头文件 | 内核文件 (`MIOpenGemmDq.cpp`) 不能包含任何 `#include` |
+| `fatal error: 'hip/hip_runtime.h' file not found` + `Code object build failed` | 内核 JIT 编译时找不到 HIP 头文件 | 内核文件 (`MIOpenGemmFp16U4.cpp`) 不能包含任何 `#include` |
 | 路径超 260 字符导致编译失败 | Windows MAX_PATH 限制 | 用 `subst M: "..."` 映射短盘符 |
 | `half_float::detail::expr` 大量错误 | MIOpenDriver 与 vcpkg half 不兼容 | 加 `-DMIOPEN_BUILD_DRIVER=OFF` |
 | `Invalid character escape '\U'` | pkg-config 解析 Windows 路径 | 加 `-DPKG_CONFIG_EXECUTABLE="PKG_CONFIG_EXECUTABLE-NOTFOUND"` |
-| `use of undeclared identifier 'miopenGemmDqForward'` | 测试代码没定义宏 | 在 `#include` 前加 `#define MIOPEN_BETA_API 1` |
+| `use of undeclared identifier 'miopenGemmFp16U4Forward'` | 测试代码没定义宏 | 在 `#include` 前加 `#define MIOPEN_BETA_API 1` |
 | 270+ `dllimport is not supported` 警告 | hipcc/clang 不支持 MSVC declspec | 无害，忽略 |
 | Windows .exe 在 WSL 中找不到 DLL | DLL 搜索走 Windows 规则 | 用 `cmd.exe /c "set PATH=... && xxx.exe"` 运行 |
 | `make: hipcc: No such file or directory` | WSL 中没找到 hipcc | Makefile 中用完整路径 `/mnt/c/AMD/ROCm/7.1/bin/hipcc.exe` |
@@ -422,7 +422,7 @@ OFFLOAD := --offload-arch=gfx1200    # RDNA4 (Radeon RX 9070 等)
 
 ### 修改 kernel 后的增量编译
 
-修改 `src/kernels/MIOpenGemmDq.cpp` 后，`ninja` 会自动重新 inline kernel 并重链接。
+修改 `src/kernels/MIOpenGemmFp16U4.cpp` 后，`ninja` 会自动重新 inline kernel 并重链接。
 通常只需编译 2-4 个目标，十几秒即可完成。
 
 ```powershell
@@ -430,18 +430,18 @@ cd M:\build
 ninja -j8
 ```
 
-### GemmDq 在 MIOpen 中的调用链
+### GemmFp16U4 在 MIOpen 中的调用链
 
 ```
 用户调用
-  └── miopenGemmDqForward()              [gemmdq_api.cpp — C API]
-        └── miopen::GemmDqForward()      [gemmdq.cpp — C++ API]
-              ├── ProblemDescription       [参数校验: M%128, N%128, K%32]
-              ├── GemmDqInvokeParams       [封装所有指针和标量]
+  └── miopenGemmFp16U4Forward()                [gemm_fp16_u4_api.cpp — C API]
+        └── miopen::GemmFp16U4Forward()        [gemm_fp16_u4.cpp — C++ API]
+              ├── ProblemDescription             [参数校验: M%128, N%128, K%32]
+              ├── GemmFp16U4InvokeParams         [封装所有指针和标量]
               └── SolverContainer::ExecutePrimitive()
-                    ├── IsApplicable()     [检查维度对齐]
-                    └── GetSolution()      [配置 2D grid + 512 threads/block]
-                          └── GemmDqFusedWmmaForward   [GPU Kernel]
+                    ├── IsApplicable()           [检查维度对齐]
+                    └── GetSolution()            [配置 2D grid + 512 threads/block]
+                          └── GemmFp16U4FusedWmmaForward   [GPU Kernel]
 ```
 
 ### Kernel 约束（MIOpen JIT 内核规则）

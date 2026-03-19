@@ -27,7 +27,7 @@
 #pragma once
 
 #include <miopen/solver.hpp>
-#include <miopen/gemmdq/problem_description.hpp>
+#include <miopen/gemm_fp16_u4/problem_description.hpp>
 
 #include <utility>
 
@@ -35,28 +35,28 @@ namespace miopen {
 
 namespace solver {
 
-namespace gemmdq {
+namespace gemm_fp16_u4 {
 
-using GemmDqSolver = NonTunableSolverBase<ExecutionContext, miopen::gemmdq::ProblemDescription>;
+using GemmFp16U4Solver = NonTunableSolverBase<ExecutionContext, miopen::gemm_fp16_u4::ProblemDescription>;
 
-struct GemmDqForward final : GemmDqSolver
+struct GemmFp16U4Forward final : GemmFp16U4Solver
 {
-    const std::string& SolverDbId() const override { return GetSolverDbId<GemmDqForward>(); }
+    const std::string& SolverDbId() const override { return GetSolverDbId<GemmFp16U4Forward>(); }
 
     bool IsApplicable(const ExecutionContext& context,
-                      const miopen::gemmdq::ProblemDescription& problem) const override;
+                      const miopen::gemm_fp16_u4::ProblemDescription& problem) const override;
     ConvSolution GetSolution(const ExecutionContext& context,
-                             const miopen::gemmdq::ProblemDescription& problem) const override;
+                             const miopen::gemm_fp16_u4::ProblemDescription& problem) const override;
     std::size_t GetWorkspaceSize(
         [[maybe_unused]] const ExecutionContext& context,
-        [[maybe_unused]] const miopen::gemmdq::ProblemDescription& problem) const override
+        [[maybe_unused]] const miopen::gemm_fp16_u4::ProblemDescription& problem) const override
     {
         return 0;
     }
     bool MayNeedWorkspace() const override { return false; }
 };
 
-} // namespace gemmdq
+} // namespace gemm_fp16_u4
 
 } // namespace solver
 

@@ -2794,8 +2794,8 @@ MIOPEN_EXPORT miopenStatus_t miopenCatForward(miopenHandle_t handle,
 /** @} */
 // CLOSEOUT CAT DOXYGEN GROUP
 
-// GemmDq APIs (Fused GEMM + Dequantization, FP16 × UINT4)
-/** @addtogroup gemmdq
+// GemmFp16U4 APIs (Fused GEMM + Dequantization, FP16 × UINT4)
+/** @addtogroup gemm_fp16_u4
  *
  *  @{
  */
@@ -2822,7 +2822,7 @@ MIOPEN_EXPORT miopenStatus_t miopenCatForward(miopenHandle_t handle,
  * @param ldc            Leading dimension of C (>= M) (input)
  * @return               miopenStatus_t
  */
-MIOPEN_EXPORT miopenStatus_t miopenGemmDqForward(miopenHandle_t handle,
+MIOPEN_EXPORT miopenStatus_t miopenGemmFp16U4Forward(miopenHandle_t handle,
                                                  int M,
                                                  int N,
                                                  int K,
@@ -2837,7 +2837,7 @@ MIOPEN_EXPORT miopenStatus_t miopenGemmDqForward(miopenHandle_t handle,
                                                  int ldc);
 
 /** @} */
-// CLOSEOUT GEMMDQ DOXYGEN GROUP
+// CLOSEOUT GEMM_FP16_U4 DOXYGEN GROUP
 #endif
 
 // Batch-Normalization APIs

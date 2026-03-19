@@ -1,7 +1,7 @@
 // ============================================================
-// MIOpen GemmDq (Fused GEMM + Dequantization) Verification Test
+// MIOpen GemmFp16U4 (Fused GEMM + Dequantization) Verification Test
 //
-// Tests the miopenGemmDqForward() API which performs:
+// Tests the miopenGemmFp16U4Forward() API which performs:
 //   C[M×N] = A[M×K] × dequant(B_packed[N×K/2])^T
 //
 // A:        FP16 col-major (M × K), stride lda = M
@@ -11,7 +11,7 @@
 // C:        FP16 col-major (M × N), stride ldc = M
 //
 // Workflow:
-//   1) python3 gen_gemm_dq_data.py MxKxN --group-size GS --dir data
+//   1) python3 gen_gemm_fp16_u4_data.py MxKxN --group-size GS --dir data
 //   2) make && make run
 //
 // Build: make
@@ -69,7 +69,7 @@ static bool readBin(const std::string& path, std::vector<T>& data, size_t count)
 }
 
 // ============================================================
-// Benchmark helpers (same pattern as Gemm/test_gemm.cpp)
+// Benchmark helpers
 // ============================================================
 static int calibrateIters(double warmup_ms, int warmup_count,
                           double target_ms = 2000.0, int lo = 5, int hi = 200)
@@ -109,18 +109,18 @@ static MeasureResult measureMedian(hipStream_t stream, int niters,
     return {round_ms[NROUNDS / 2], round_ms[0], round_ms[NROUNDS - 1]};
 }
 
-bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_dir)
+bool test_gemm_fp16_u4(int M, int N, int K, int group_size, const std::string& data_dir)
 {
     int num_groups_k = K / group_size;
 
-    std::cout << "\n=== Test GemmDq M=" << M << " N=" << N << " K=" << K
+    std::cout << "\n=== Test GemmFp16U4 M=" << M << " N=" << N << " K=" << K
               << " group_size=" << group_size << " ===" << std::endl;
 
-    std::string fA = data_dir + "/gemm_dq_A.bin";
-    std::string fB = data_dir + "/gemm_dq_B_packed.bin";
-    std::string fS = data_dir + "/gemm_dq_scales.bin";
-    std::string fZ = data_dir + "/gemm_dq_zeros.bin";
-    std::string fC = data_dir + "/gemm_dq_C_ref.bin";
+    std::string fA = data_dir + "/gemm_fp16_u4_A.bin";
+    std::string fB = data_dir + "/gemm_fp16_u4_B_packed.bin";
+    std::string fS = data_dir + "/gemm_fp16_u4_scales.bin";
+    std::string fZ = data_dir + "/gemm_fp16_u4_zeros.bin";
+    std::string fC = data_dir + "/gemm_fp16_u4_C_ref.bin";
 
     std::vector<__half>  h_A;
     std::vector<uint8_t> h_B_packed;
@@ -139,7 +139,7 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
        !readBin(fZ, h_zeros, countZ))
     {
         std::cerr << "  ERROR: Failed to read input data files from " << data_dir << "/" << std::endl;
-        std::cerr << "  Run: python3 gen_gemm_dq_data.py "
+        std::cerr << "  Run: python3 gen_gemm_fp16_u4_data.py "
                   << M << "x" << K << "x" << N
                   << " --group-size " << group_size
                   << " --dir " << data_dir << std::endl;
@@ -152,7 +152,6 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
     if(!has_ref)
         std::cout << "  WARNING: No Python reference file (" << fC << "), skipping verification." << std::endl;
 
-    // Allocate GPU memory
     __half*  d_A        = nullptr;
     uint8_t* d_B_packed = nullptr;
     __half*  d_scales   = nullptr;
@@ -177,20 +176,18 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
     HIP_CHECK(hipMemcpy(d_zeros, h_zeros.data(), size_zeros, hipMemcpyHostToDevice));
     HIP_CHECK(hipMemset(d_C, 0, size_C));
 
-    // Create MIOpen handle
     miopenHandle_t handle;
     MIOPEN_CHECK(miopenCreate(&handle));
 
     hipStream_t stream;
     MIOPEN_CHECK(miopenGetStream(handle, &stream));
 
-    // Warmup (3 calls)
     std::cout << "  Warmup..." << std::flush;
     auto tw0 = std::chrono::steady_clock::now();
     miopenStatus_t status = miopenStatusSuccess;
     for(int w = 0; w < 3; w++)
     {
-        status = miopenGemmDqForward(
+        status = miopenGemmFp16U4Forward(
             handle, M, N, K,
             d_A, M,
             d_B_packed,
@@ -220,11 +217,10 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
     std::cout << " OK (" << std::fixed << std::setprecision(2) << warmup_ms
               << " ms), iters=" << niters << std::endl;
 
-    // Benchmark: NROUNDS rounds, niters iterations each
     std::cout << "  Benchmarking (" << NROUNDS << " rounds x " << niters << " iters)..."
               << std::flush;
     auto mr = measureMedian(stream, niters, [&]() {
-        miopenGemmDqForward(
+        miopenGemmFp16U4Forward(
             handle, M, N, K,
             d_A, M,
             d_B_packed,
@@ -233,10 +229,8 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
             d_C, M);
     });
 
-    // Performance stats
     double avg_ms    = mr.median_ms / niters;
     double gflops    = (2.0 * M * N * K) / (avg_ms * 1e6);
-    // Memory: A(FP16) + B_packed(uint4) + scales(FP16) + zeros(FP16) + C(FP16)
     double mem_bytes = static_cast<double>(countA) * 2 + static_cast<double>(countB)
                      + static_cast<double>(countS) * 2 + static_cast<double>(countZ) * 2
                      + static_cast<double>(countC) * 2;
@@ -252,7 +246,6 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
     std::cout << "  Range:  " << mr.min_ms / niters << " ~ " << mr.max_ms / niters
               << " ms  (jitter " << std::setprecision(1) << range_pct << "%)" << std::endl;
 
-    // Copy result back for verification
     std::vector<__half> h_C(countC);
     HIP_CHECK(hipMemcpy(h_C.data(), d_C, size_C, hipMemcpyDeviceToHost));
 
@@ -318,8 +311,8 @@ bool test_gemm_dq(int M, int N, int K, int group_size, const std::string& data_d
 
 int main(int argc, char* argv[])
 {
-    std::cout << "MIOpen GemmDq (Fused GEMM + Dequantization) Verification" << std::endl;
-    std::cout << "========================================================" << std::endl;
+    std::cout << "MIOpen GemmFp16U4 (Fused GEMM + Dequantization) Verification" << std::endl;
+    std::cout << "=============================================================" << std::endl;
 
     hipDeviceProp_t prop;
     HIP_CHECK(hipGetDeviceProperties(&prop, 0));
@@ -349,9 +342,9 @@ int main(int argc, char* argv[])
     std::cout << "Data dir: " << data_dir << std::endl;
 
     bool all_pass = true;
-    all_pass &= test_gemm_dq(M, N, K, gs, data_dir);
+    all_pass &= test_gemm_fp16_u4(M, N, K, gs, data_dir);
 
-    std::cout << "\n========================================================" << std::endl;
+    std::cout << "\n=============================================================" << std::endl;
     std::cout << "Overall: " << (all_pass ? "ALL PASSED" : "SOME FAILED") << std::endl;
 
     return all_pass ? 0 : 1;

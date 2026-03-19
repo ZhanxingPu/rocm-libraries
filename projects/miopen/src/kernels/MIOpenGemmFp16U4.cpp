@@ -43,49 +43,49 @@
 typedef _Float16 half16 __attribute__((ext_vector_type(16)));
 typedef float    float8 __attribute__((ext_vector_type(8)));
 
-#define GEMMDQ_WMMA_TILE 16
-#define GEMMDQ_BM_R 128
-#define GEMMDQ_BN_R 128
-#define GEMMDQ_BK_W 32
-#define GEMMDQ_WT_MR 2
-#define GEMMDQ_WT_NR 2
-#define GEMMDQ_WM_R (GEMMDQ_BM_R / (GEMMDQ_WT_MR * GEMMDQ_WMMA_TILE))
-#define GEMMDQ_WN_R (GEMMDQ_BN_R / (GEMMDQ_WT_NR * GEMMDQ_WMMA_TILE))
-#define GEMMDQ_NW_R (GEMMDQ_WM_R * GEMMDQ_WN_R)
-#define GEMMDQ_THR_R (GEMMDQ_NW_R * 32)
+#define GEMM_FP16_U4_WMMA_TILE 16
+#define GEMM_FP16_U4_BM_R 128
+#define GEMM_FP16_U4_BN_R 128
+#define GEMM_FP16_U4_BK_W 32
+#define GEMM_FP16_U4_WT_MR 2
+#define GEMM_FP16_U4_WT_NR 2
+#define GEMM_FP16_U4_WM_R (GEMM_FP16_U4_BM_R / (GEMM_FP16_U4_WT_MR * GEMM_FP16_U4_WMMA_TILE))
+#define GEMM_FP16_U4_WN_R (GEMM_FP16_U4_BN_R / (GEMM_FP16_U4_WT_NR * GEMM_FP16_U4_WMMA_TILE))
+#define GEMM_FP16_U4_NW_R (GEMM_FP16_U4_WM_R * GEMM_FP16_U4_WN_R)
+#define GEMM_FP16_U4_THR_R (GEMM_FP16_U4_NW_R * 32)
 
 extern "C" __global__
-    __attribute__((amdgpu_flat_work_group_size(GEMMDQ_THR_R, GEMMDQ_THR_R)))
+    __attribute__((amdgpu_flat_work_group_size(GEMM_FP16_U4_THR_R, GEMM_FP16_U4_THR_R)))
     __attribute__((amdgpu_waves_per_eu(8)))
-    void GemmDqFusedWmmaForward(int M,
-                                int N,
-                                int K,
-                                const _Float16* __restrict__ A,
-                                int lda,
-                                const unsigned char* __restrict__ B_packed,
-                                const _Float16* __restrict__ scales,
-                                const _Float16* __restrict__ zeros,
-                                int group_size,
-                                int num_groups_k,
-                                _Float16* __restrict__ C,
-                                int ldc)
+    void GemmFp16U4FusedWmmaForward(int M,
+                                    int N,
+                                    int K,
+                                    const _Float16* __restrict__ A,
+                                    int lda,
+                                    const unsigned char* __restrict__ B_packed,
+                                    const _Float16* __restrict__ scales,
+                                    const _Float16* __restrict__ zeros,
+                                    int group_size,
+                                    int num_groups_k,
+                                    _Float16* __restrict__ C,
+                                    int ldc)
 {
     constexpr int PAD_K   = 2;
-    constexpr int K_STR   = GEMMDQ_BK_W + PAD_K;
-    constexpr int A_GRP   = GEMMDQ_BM_R / 4;
-    constexpr int A_VL    = (GEMMDQ_BM_R * GEMMDQ_BK_W) / (GEMMDQ_THR_R * 4);
-    constexpr int K_STEPS = GEMMDQ_BK_W / GEMMDQ_WMMA_TILE;
+    constexpr int K_STR   = GEMM_FP16_U4_BK_W + PAD_K;
+    constexpr int A_GRP   = GEMM_FP16_U4_BM_R / 4;
+    constexpr int A_VL    = (GEMM_FP16_U4_BM_R * GEMM_FP16_U4_BK_W) / (GEMM_FP16_U4_THR_R * 4);
+    constexpr int K_STEPS = GEMM_FP16_U4_BK_W / GEMM_FP16_U4_WMMA_TILE;
 
-    __shared__ _Float16 smA[2][GEMMDQ_BM_R][K_STR];
-    __shared__ _Float16 smB[2][GEMMDQ_BN_R][K_STR];
+    __shared__ _Float16 smA[2][GEMM_FP16_U4_BM_R][K_STR];
+    __shared__ _Float16 smB[2][GEMM_FP16_U4_BN_R][K_STR];
 
     const int tid  = threadIdx.x;
     const int wid  = tid / 32;
     const int lid  = tid % 32;
     const int lane = lid % 16;
     const int sub  = lid / 16;
-    const int wrow = wid / GEMMDQ_WN_R;
-    const int wcol = wid % GEMMDQ_WN_R;
+    const int wrow = wid / GEMM_FP16_U4_WN_R;
+    const int wcol = wid % GEMM_FP16_U4_WN_R;
 
     constexpr int SWIZZLE_N = 2;
     const int n_tiles  = gridDim.x;
@@ -101,8 +101,8 @@ extern "C" __global__
         bx = block_id % n_tiles;
         by = block_id / n_tiles;
     }
-    const int row0 = by * GEMMDQ_BM_R;
-    const int col0 = bx * GEMMDQ_BN_R;
+    const int row0 = by * GEMM_FP16_U4_BM_R;
+    const int col0 = bx * GEMM_FP16_U4_BN_R;
 
     const int b_col       = tid >> 2;
     const int b_sub       = tid & 3;
@@ -114,11 +114,11 @@ extern "C" __global__
     int cached_k_grp   = -1;
     _Float16 cached_s  = 0, cached_z = 0;
 
-    float8 acc[GEMMDQ_WT_MR][GEMMDQ_WT_NR];
+    float8 acc[GEMM_FP16_U4_WT_MR][GEMM_FP16_U4_WT_NR];
 #pragma unroll
-    for(int i = 0; i < GEMMDQ_WT_MR; i++)
+    for(int i = 0; i < GEMM_FP16_U4_WT_MR; i++)
 #pragma unroll
-        for(int j = 0; j < GEMMDQ_WT_NR; j++)
+        for(int j = 0; j < GEMM_FP16_U4_WT_NR; j++)
 #pragma unroll
             for(int e = 0; e < 8; e++)
                 acc[i][j][e] = 0.0f;
@@ -130,7 +130,7 @@ extern "C" __global__
 #pragma unroll
         for(int ld = 0; ld < A_VL; ld++)
         {
-            int vid  = tid + ld * GEMMDQ_THR_R;
+            int vid  = tid + ld * GEMM_FP16_U4_THR_R;
             a_m4[ld] = (vid % A_GRP) * 4;
             a_k[ld]  = vid / A_GRP;
             a_reg[ld] =
@@ -176,32 +176,32 @@ extern "C" __global__
 #pragma unroll
         for(int ks = 0; ks < K_STEPS; ks++)
         {
-            half16 b_frag[GEMMDQ_WT_NR];
+            half16 b_frag[GEMM_FP16_U4_WT_NR];
 #pragma unroll
-            for(int wn = 0; wn < GEMMDQ_WT_NR; wn++)
+            for(int wn = 0; wn < GEMM_FP16_U4_WT_NR; wn++)
             {
-                int noff              = (wcol * GEMMDQ_WT_NR + wn) * GEMMDQ_WMMA_TILE;
+                int noff              = (wcol * GEMM_FP16_U4_WT_NR + wn) * GEMM_FP16_U4_WMMA_TILE;
                 unsigned int* dst     = reinterpret_cast<unsigned int*>(&b_frag[wn]);
                 const unsigned int* src = reinterpret_cast<const unsigned int*>(
-                    &smB[buf][noff + lane][ks * GEMMDQ_WMMA_TILE]);
+                    &smB[buf][noff + lane][ks * GEMM_FP16_U4_WMMA_TILE]);
 #pragma unroll
                 for(int i = 0; i < 8; i++)
                     dst[i] = src[i];
             }
 #pragma unroll
-            for(int wm = 0; wm < GEMMDQ_WT_MR; wm++)
+            for(int wm = 0; wm < GEMM_FP16_U4_WT_MR; wm++)
             {
-                int moff              = (wrow * GEMMDQ_WT_MR + wm) * GEMMDQ_WMMA_TILE;
+                int moff              = (wrow * GEMM_FP16_U4_WT_MR + wm) * GEMM_FP16_U4_WMMA_TILE;
                 half16 a_frag;
                 unsigned int* dst     = reinterpret_cast<unsigned int*>(&a_frag);
                 const unsigned int* src = reinterpret_cast<const unsigned int*>(
-                    &smA[buf][moff + lane][ks * GEMMDQ_WMMA_TILE]);
+                    &smA[buf][moff + lane][ks * GEMM_FP16_U4_WMMA_TILE]);
 #pragma unroll
                 for(int i = 0; i < 8; i++)
                     dst[i] = src[i];
 
 #pragma unroll
-                for(int wn = 0; wn < GEMMDQ_WT_NR; wn++)
+                for(int wn = 0; wn < GEMM_FP16_U4_WT_NR; wn++)
                     acc[wm][wn] = __builtin_amdgcn_wmma_f32_16x16x16_f16_w32(
                         a_frag, b_frag[wn], acc[wm][wn]);
             }
@@ -212,7 +212,7 @@ extern "C" __global__
     __syncthreads();
 
     int buf = 0;
-    for(int t = GEMMDQ_BK_W; t < K; t += GEMMDQ_BK_W)
+    for(int t = GEMM_FP16_U4_BK_W; t < K; t += GEMM_FP16_U4_BK_W)
     {
         int nxt = 1 - buf;
         loadTile(nxt, t);
@@ -223,13 +223,13 @@ extern "C" __global__
     computeWMMA(buf);
 
 #pragma unroll
-    for(int wm = 0; wm < GEMMDQ_WT_MR; wm++)
+    for(int wm = 0; wm < GEMM_FP16_U4_WT_MR; wm++)
     {
-        int mbase = row0 + (wrow * GEMMDQ_WT_MR + wm) * GEMMDQ_WMMA_TILE;
+        int mbase = row0 + (wrow * GEMM_FP16_U4_WT_MR + wm) * GEMM_FP16_U4_WMMA_TILE;
 #pragma unroll
-        for(int wn = 0; wn < GEMMDQ_WT_NR; wn++)
+        for(int wn = 0; wn < GEMM_FP16_U4_WT_NR; wn++)
         {
-            int nbase = col0 + (wcol * GEMMDQ_WT_NR + wn) * GEMMDQ_WMMA_TILE;
+            int nbase = col0 + (wcol * GEMM_FP16_U4_WT_NR + wn) * GEMM_FP16_U4_WMMA_TILE;
 #pragma unroll
             for(int e = 0; e < 8; e++)
             {

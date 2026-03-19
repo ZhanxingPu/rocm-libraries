@@ -34,7 +34,7 @@ namespace miopen {
 
 struct NetworkConfig;
 
-namespace gemmdq {
+namespace gemm_fp16_u4 {
 
 // Fused GEMM + Dequantization (RDNA3 WMMA)
 //
@@ -53,23 +53,23 @@ struct ProblemDescription : ProblemDescriptionBase
     {
         if(M <= 0 || N <= 0 || K <= 0)
         {
-            MIOPEN_THROW(miopenStatusBadParm, "GemmDqForward: M, N, K must be positive.");
+            MIOPEN_THROW(miopenStatusBadParm, "GemmFp16U4Forward: M, N, K must be positive.");
         }
         if(M % 128 != 0 || N % 128 != 0 || K % 32 != 0)
         {
             MIOPEN_THROW(miopenStatusBadParm,
-                         "GemmDqForward: M must be multiple of 128, "
+                         "GemmFp16U4Forward: M must be multiple of 128, "
                          "N must be multiple of 128, K must be multiple of 32.");
         }
         if(group_size <= 0 || num_groups_k <= 0)
         {
             MIOPEN_THROW(miopenStatusBadParm,
-                         "GemmDqForward: group_size and num_groups_k must be positive.");
+                         "GemmFp16U4Forward: group_size and num_groups_k must be positive.");
         }
         if(K != group_size * num_groups_k)
         {
             MIOPEN_THROW(miopenStatusBadParm,
-                         "GemmDqForward: K must equal group_size * num_groups_k.");
+                         "GemmFp16U4Forward: K must equal group_size * num_groups_k.");
         }
     }
 
@@ -89,5 +89,5 @@ private:
     int num_groups_k;
 };
 
-} // namespace gemmdq
+} // namespace gemm_fp16_u4
 } // namespace miopen

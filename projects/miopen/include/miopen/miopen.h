@@ -2793,6 +2793,51 @@ MIOPEN_EXPORT miopenStatus_t miopenCatForward(miopenHandle_t handle,
 
 /** @} */
 // CLOSEOUT CAT DOXYGEN GROUP
+
+// GemmDq APIs (Fused GEMM + Dequantization, FP16 × UINT4)
+/** @addtogroup gemmdq
+ *
+ *  @{
+ */
+/*! @brief Execute a fused GEMM + dequantization forward operation
+ *
+ * Computes C = A × dequant(B_packed)^T using RDNA3 WMMA instructions.
+ * A is FP16 col-major (M×K), B_packed is uint4 packed (N×K/2),
+ * output C is FP16 col-major (M×N).
+ *
+ * Requires: M % 128 == 0, N % 128 == 0, K % 32 == 0, RDNA3+ GPU.
+ *
+ * @param handle         MIOpen handle (input)
+ * @param M              Number of rows in A and C (input)
+ * @param N              Number of columns in C / rows in B (input)
+ * @param K              Inner dimension (input)
+ * @param A              FP16 input matrix, col-major (input)
+ * @param lda            Leading dimension of A (>= M) (input)
+ * @param B_packed       Packed uint4 weight matrix (input)
+ * @param scales         FP16 per-group scale factors (input)
+ * @param zeros          FP16 per-group zero points (input)
+ * @param group_size     Quantization group size along K (input)
+ * @param num_groups_k   Number of groups along K (= K/group_size) (input)
+ * @param C              FP16 output matrix, col-major (output)
+ * @param ldc            Leading dimension of C (>= M) (input)
+ * @return               miopenStatus_t
+ */
+MIOPEN_EXPORT miopenStatus_t miopenGemmDqForward(miopenHandle_t handle,
+                                                 int M,
+                                                 int N,
+                                                 int K,
+                                                 const void* A,
+                                                 int lda,
+                                                 const void* B_packed,
+                                                 const void* scales,
+                                                 const void* zeros,
+                                                 int group_size,
+                                                 int num_groups_k,
+                                                 void* C,
+                                                 int ldc);
+
+/** @} */
+// CLOSEOUT GEMMDQ DOXYGEN GROUP
 #endif
 
 // Batch-Normalization APIs

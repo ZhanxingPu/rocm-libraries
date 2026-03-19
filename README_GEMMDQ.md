@@ -44,7 +44,7 @@ rocm-libraries/
 └── op_examples/gemmdq/
     ├── test_gemm_dq.cpp                     # 正确性验证 + 性能测试
     ├── gen_gemm_dq_data.py                  # 测试数据生成 + NumPy 参考实现
-    └── Makefile                             # WSL + hipcc 编译/运行脚本
+    └── Makefile                             # 跨平台编译/运行脚本（WSL + Windows）
 ```
 
 ---
@@ -70,11 +70,14 @@ rocm-libraries/
 
 ### 1.2 安装构建工具
 
-| 工具 | 安装方式 |
-|------|----------|
-| CMake ≥ 3.15 | https://cmake.org/download/ 安装 MSI，勾选加入 PATH |
-| Ninja | `pip install ninja` |
-| WSL (Ubuntu) | Windows 应用商店安装 Ubuntu，用于运行编译后的测试 |
+| 工具 | 安装方式 | 说明 |
+|------|----------|------|
+| CMake ≥ 3.15 | https://cmake.org/download/ 安装 MSI，勾选加入 PATH | 编译 MIOpen 库 |
+| Ninja | `pip install ninja` | CMake 构建后端 |
+| GNU Make | `choco install make` | 编译和运行测试程序 |
+| Python + NumPy | `pip install numpy` | 生成测试数据 |
+
+> **WSL 是可选的**。整个流程（编译 MIOpen、编译/运行测试）均可在 Windows CMD/PowerShell 中完成。如果你更习惯 WSL，Makefile 也同样支持。
 
 ### 1.3 准备 vcpkg（MIOpen 第三方依赖管理）
 
@@ -227,34 +230,58 @@ ninja -j8
 |------|------|
 | `test_gemm_dq.cpp` | 正确性验证 + 性能基准测试（调用 `miopenGemmDqForward` C API） |
 | `gen_gemm_dq_data.py` | 生成测试数据（随机 FP16/UINT4）+ NumPy 参考结果 |
-| `Makefile` | WSL 下使用 hipcc 编译和运行 |
+| `Makefile` | 跨平台编译/运行（WSL 和 Windows CMD/PowerShell） |
+
+Makefile 通过 `$(OS)` 自动检测运行环境，WSL 和 Windows CMD/PowerShell 均可直接使用。
+
+### 3.0 前提：安装 GNU Make（仅 Windows 原生方式）
+
+在 Windows CMD/PowerShell 中使用 Makefile 前，需先安装 GNU Make：
+
+```powershell
+# 方式一：Chocolatey（推荐）
+choco install make
+
+# 方式二：手动下载
+# 从 https://gnuwin32.sourceforge.net/packages/make.htm 下载并添加到 PATH
+```
+
+> WSL 中已自带 `make`，无需额外安装。
 
 ### 3.1 修改 Makefile
 
-打开 `op_examples/gemmdq/Makefile`，修改顶部的路径变量以匹配你的环境：
+打开 `op_examples/gemmdq/Makefile`，修改顶部的变量以匹配你的环境：
 
 ```makefile
-# 1. hipcc.exe 路径（WSL 格式）
-HIPCC      := /mnt/c/AMD/ROCm/7.1/bin/hipcc.exe
+# GPU 架构
+OFFLOAD := --offload-arch=gfx1150
 
-# 2. GPU 架构
-OFFLOAD    := --offload-arch=gfx1150
-
-# 3. vcpkg include 路径（默认在 rocm-libraries 同级目录，按实际情况修改）
-VCPKG_INC  = ../../../vcpkg/installed/x64-windows/include
-
-# 4. HIP SDK Windows 路径（用于运行时 DLL 加载）
-HIP_SDK_WIN = C:\AMD\Rocm\7.1
+# vcpkg include 路径（默认在 rocm-libraries 同级目录，按实际情况修改）
+VCPKG_INC := ../../../vcpkg/installed/x64-windows/include
 ```
+
+HIP SDK 路径会根据环境自动设置默认值：
+
+| 环境 | 默认 HIP_SDK | 覆盖方式 |
+|------|-------------|----------|
+| WSL | `/mnt/c/AMD/ROCm/7.1` | `make HIP_SDK=/mnt/c/AMD/ROCm/7.1` |
+| Windows | `C:/AMD/ROCm/7.1` | `make HIP_SDK=C:/AMD/ROCm/7.1` |
 
 > MIOpen 源码和 build 路径已通过相对路径（`../../projects/miopen`）自动指向仓库内的正确位置，无需手动配置。
 
 ### 3.2 编译
 
-在 WSL 中：
+**WSL**：
 
 ```bash
 cd /mnt/c/<WORKSPACE>/rocm-libraries/op_examples/gemmdq
+make clean && make
+```
+
+**Windows CMD/PowerShell**：
+
+```powershell
+cd <WORKSPACE>\rocm-libraries\op_examples\gemmdq
 make clean && make
 ```
 
@@ -270,7 +297,8 @@ make gendata
 make gendata SIZE=256x512x256 GS=128
 ```
 
-需要 Python3 + NumPy。生成的 `.bin` 文件保存在 `data/` 子目录中。
+需要 Python + NumPy（WSL 中使用 `python3`，Windows 中使用 `python`，Makefile 会自动选择）。
+生成的 `.bin` 文件保存在 `data/` 子目录中。
 
 ### 3.4 运行
 
@@ -289,6 +317,9 @@ make test_all
 ```
 
 **约束条件**：M 必须是 128 的倍数，N 必须是 128 的倍数，K 必须是 32 的倍数。
+
+> **运行方式差异**：WSL 中 Makefile 通过 `cmd.exe /c "set PATH=... && exe"` 运行（自动用 `wslpath` 转换路径），
+> Windows 中则直接 `set PATH=... && .\exe`。用户不需要关心这些细节，只需执行 `make run` 即可。
 
 ### 3.5 预期输出
 
@@ -316,6 +347,8 @@ Overall: ALL PASSED
 ```
 
 > 第一次调用时 MIOpen 需要 JIT 编译 kernel（约 500-600ms），后续调用已缓存，通常 2-3ms。
+
+> **注意**：测试程序使用 `hipcc` 编译。MIOpen 库本身在 PowerShell 中编译（第二节），测试程序可以在 WSL 或 Windows CMD/PowerShell 中编译和运行（本节）。Windows 原生方式需要先安装 GNU Make（见 3.0 节）。
 
 ---
 

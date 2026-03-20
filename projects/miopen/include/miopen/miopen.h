@@ -2841,6 +2841,57 @@ MIOPEN_EXPORT miopenStatus_t miopenGemmFp16U4Forward(miopenHandle_t handle,
 
 /** @} */
 // CLOSEOUT GEMM_FP16_U4 DOXYGEN GROUP
+
+// RopeGqa APIs (RoPE + GQA Flash Attention)
+/** @addtogroup rope_gqa
+ *
+ *  @{
+ */
+/*! @brief Execute fused RoPE + GQA flash attention forward
+ *
+ * Applies Rotary Position Embedding (LLaMA-style half-rotation) on Q and K
+ * in-place, then performs grouped-query flash multi-head attention:
+ *   RoPE(Q), RoPE(K) → O = softmax(Q'K'^T / sqrt(hdim)) × V
+ *
+ * All tensors are FP16 with layout [batch, nhead, seqlen, hdim].
+ * GQA ratio = nhead_q / nhead_k (must be an integer).
+ *
+ * Requires CK Tile FMHA support (build with -DCK_TILE_INCLUDE_DIR=...).
+ * Currently supports hdim=128 on RDNA3+ GPUs.
+ *
+ * @param handle         MIOpen handle (input)
+ * @param batch          Batch size (input)
+ * @param seqlen_q       Query sequence length (input)
+ * @param seqlen_k       Key/Value sequence length (input)
+ * @param nhead_q        Number of query heads (input)
+ * @param nhead_k        Number of key/value heads (input, nhead_q % nhead_k == 0)
+ * @param hdim           Head dimension (input)
+ * @param rotary_dim     Dimensions to rotate (input, even, <= hdim)
+ * @param Q              FP16 query [batch, nhead_q, seqlen_q, hdim] (input/output, modified in-place)
+ * @param K              FP16 key   [batch, nhead_k, seqlen_k, hdim] (input/output, modified in-place)
+ * @param V              FP16 value [batch, nhead_k, seqlen_k, hdim] (input)
+ * @param O              FP16 output [batch, nhead_q, seqlen_q, hdim] (output)
+ * @param cos_t          FP16 cosine table [max(seqlen_q,seqlen_k), rotary_dim/2] (input)
+ * @param sin_t          FP16 sine table   [max(seqlen_q,seqlen_k), rotary_dim/2] (input)
+ * @return               miopenStatus_t
+ */
+MIOPEN_EXPORT miopenStatus_t miopenRopeGqaForward(miopenHandle_t handle,
+                                                  int batch,
+                                                  int seqlen_q,
+                                                  int seqlen_k,
+                                                  int nhead_q,
+                                                  int nhead_k,
+                                                  int hdim,
+                                                  int rotary_dim,
+                                                  void* Q,
+                                                  void* K,
+                                                  const void* V,
+                                                  void* O,
+                                                  const void* cos_t,
+                                                  const void* sin_t);
+
+/** @} */
+// CLOSEOUT ROPE_GQA DOXYGEN GROUP
 #endif
 
 // Batch-Normalization APIs

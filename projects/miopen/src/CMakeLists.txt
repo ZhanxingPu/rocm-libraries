@@ -69,6 +69,9 @@ set( MIOpen_Source
     cat/problem_description.cpp
     gemm_fp16_u4_api.cpp
     gemm_fp16_u4/problem_description.cpp
+    rope_gqa_api.cpp
+    rope_gqa/problem_description.cpp
+    kernels/MIOpenRopeGqa.cpp
     check_numerics.cpp
     conv/invokers/gcn_asm_1x1u.cpp
     conv/invokers/gcn_asm_1x1u_ss.cpp
@@ -197,6 +200,7 @@ set( MIOpen_Source
     solver/batchnorm/forward_spatial.cpp
     solver/cat/forward_cat.cpp
     solver/gemm_fp16_u4/forward_gemm_fp16_u4.cpp
+    solver/rope_gqa/forward_rope_gqa.cpp
     solver/conv/conv_asm_1x1u.cpp
     solver/conv/conv_asm_1x1u_stride2.cpp
     solver/conv/conv_asm_3x3u.cpp
@@ -728,6 +732,7 @@ if( MIOPEN_BACKEND MATCHES "OpenCL" OR MIOPEN_BACKEND STREQUAL "HIPOC" OR MIOPEN
         addlayernorm.cpp
         cat.cpp
         gemm_fp16_u4.cpp
+        rope_gqa.cpp
         exec_utils.cpp
         groupnorm.cpp
         getitem.cpp
@@ -955,6 +960,14 @@ if(MIOPEN_USE_COMPOSABLEKERNEL)
     if(GPU_TARGETS MATCHES "gfx950")
         target_compile_definitions(MIOpen PRIVATE CK_USE_GFX95)
     endif()
+endif()
+
+set(CK_TILE_INCLUDE_DIR "" CACHE PATH "Path to CK Tile headers for FMHA support (e.g. composable_kernel/include)")
+if(CK_TILE_INCLUDE_DIR)
+    message(STATUS "CK Tile FMHA enabled: ${CK_TILE_INCLUDE_DIR}")
+    target_include_directories(MIOpen SYSTEM PRIVATE ${CK_TILE_INCLUDE_DIR})
+    target_compile_definitions(MIOpen PRIVATE MIOPEN_USE_CK_TILE_FMHA=1)
+    target_compile_definitions(MIOpen PRIVATE CK_TILE_USE_WMMA=1)
 endif()
 
 if(WIN32)
